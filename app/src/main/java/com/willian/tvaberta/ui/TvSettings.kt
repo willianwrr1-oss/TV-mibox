@@ -172,6 +172,10 @@ fun TvSettingsScreen(vm: MainViewModel) {
             }
             TvActionRow("Adicionar país", "Lista oficial de canais do iptv-org por país") { pickCountry = true }
             TvActionRow("Adicionar lista M3U por link", "Digite o endereço de uma lista") { customDialog = true }
+            TvActionRow("Restaurar fontes originais", "Volta só para IPTV-org, CatTV e PublicDomainM3U (filmes e séries)") {
+                Repo.resetSources()
+                vm.refresh(true)
+            }
         }
 
         TvSection("Dados") {

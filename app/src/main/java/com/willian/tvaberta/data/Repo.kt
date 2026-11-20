@@ -166,6 +166,7 @@ object Repo {
                     if (!v.customName.isNullOrBlank()) e.put("n", v.customName)
                     if (v.plays > 0) e.put("p", v.plays)
                     if (v.lastPlayed > 0L) e.put("l", v.lastPlayed)
+                    if (!v.customGroup.isNullOrBlank()) e.put("g", v.customGroup)
                     o.put(k, e)
                 }
                 writeAtomic(File(ctx.filesDir, "states.json"), o.toString())
@@ -188,6 +189,7 @@ object Repo {
                     customName = e.optString("n", "").ifBlank { null },
                     plays = e.optInt("p", 0),
                     lastPlayed = e.optLong("l", 0L),
+                    customGroup = e.optString("g", "").ifBlank { null },
                 )
             }
             m
@@ -204,6 +206,15 @@ object Repo {
         persistSources()
     }
 
+    /** Volta a lista de fontes para as quatro originais; apaga as listas baixadas das outras. */
+    fun resetSources() {
+        val keep = DefaultSources.list.map { it.id }.toSet()
+        _sources.value.filter { it.id !in keep }.forEach { File(listsDir(), it.id + ".m3u").delete() }
+        _sources.value = DefaultSources.list
+        persistSources()
+        scope.launch { reload() }
+    }
+
     fun removeSource(id: String) {
         _sources.update { list -> list.filter { it.id != id } }
         File(listsDir(), "$id.m3u").delete()
@@ -215,6 +226,13 @@ object Repo {
         _sources.update { list -> list.map { if (it.id == id) it.copy(enabled = enabled) else it } }
         persistSources()
         scope.launch { reload() }
+    }
+
+    /** Nome mostrado na guia de origem: fonte cadastrada, arquivo importado ou "Meus canais". */
+    fun originName(sourceId: String): String = when {
+        sourceId.startsWith("imp:") -> sourceId.removePrefix("imp:")
+        sourceId == "manual" -> "Meus canais"
+        else -> _sources.value.firstOrNull { it.id == sourceId }?.name ?: sourceId
     }
 
     fun hasCache(id: String): Boolean = File(listsDir(), "$id.m3u").exists()
@@ -305,8 +323,8 @@ object Repo {
      * Importa uma lista M3U ignorando o que o app já tem (mesmo tvg-id, mesmo nome ou mesmo link,
      * em qualquer fonte, ativa ou não). Devolve (novos, ignorados).
      */
-    fun importM3u(text: String): Pair<Int, Int> {
-        val parsed = M3uParser.parse(text, "manual", keyPrefix = "m:")
+    fun importM3u(text: String, listName: String): Pair<Int, Int> {
+        val parsed = M3uParser.parse(text, "imp:" + listName, keyPrefix = "m:")
         val have = _channels.value + manual
         val names = HashSet<String>()
         val ids = HashSet<String>()
@@ -354,6 +372,7 @@ object Repo {
                     if (c.logo != null) o.put("logo", c.logo)
                     if (c.userAgent != null) o.put("ua", c.userAgent)
                     if (c.referrer != null) o.put("ref", c.referrer)
+                    o.put("sid", c.sourceId)
                     if (c.quality != null) o.put("q", c.quality)
                     arr.put(o)
                 }
@@ -389,7 +408,7 @@ object Repo {
                         quality = o.optString("q", "").ifBlank { null },
                         geoBlocked = false,
                         not247 = false,
-                        sourceId = "manual",
+                        sourceId = o.optString("sid", "manual").ifBlank { "manual" },
                     )
                 )
             }

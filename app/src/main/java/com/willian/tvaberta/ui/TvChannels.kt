@@ -59,9 +59,17 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
     val category by vm.category.collectAsState()
     val refreshing by Repo.refreshing.collectAsState()
 
-    val base = remember(all, s) {
+    val origin by vm.origin.collectAsState()
+    val baseAll = remember(all, s) {
         val listed = all.filter { isListed(it, s) }
         if (favoritesOnly) listed.filter { it.st.favorite } else listed
+    }
+    val origins = remember(baseAll) {
+        baseAll.map { it.ch.sourceId }.distinct().sortedBy { Repo.originName(it).lowercase() }
+    }
+    val org = origin?.takeIf { it in origins }
+    val base = remember(baseAll, org) {
+        if (org == null) baseAll else baseAll.filter { it.ch.sourceId == org }
     }
     val cats = remember(base) { categoriesOf(base) }
     val cat = category?.takeIf { it in cats }
@@ -116,6 +124,20 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
             TvButton("Atualizar", icon = Icons.Default.Refresh) { vm.refresh(true) }
         }
         if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
+
+        if (origins.size > 1) {
+            LazyRow(
+                contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    TvButton("Todas as listas", selected = org == null) { vm.origin.value = null }
+                }
+                items(origins) { o ->
+                    TvButton(Repo.originName(o), selected = org == o) { vm.origin.value = o }
+                }
+            }
+        }
 
         if (s.showCategoryChips && cats.size > 1) {
             LazyRow(
@@ -236,9 +258,17 @@ private fun ChannelCard(
 @Composable
 fun ChannelMenuDialog(vm: MainViewModel, item: ChannelItem, onClose: () -> Unit) {
     val first = remember { FocusRequester() }
+    var moveOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(120)
         runCatching { first.requestFocus() }
+    }
+    if (moveOpen) {
+        TvMoveGroupDialog(vm, listOf(item.ch.key)) {
+            moveOpen = false
+            onClose()
+        }
+        return
     }
     AlertDialog(
         onDismissRequest = onClose,
@@ -257,6 +287,7 @@ fun ChannelMenuDialog(vm: MainViewModel, item: ChannelItem, onClose: () -> Unit)
                     vm.renameTarget = item
                     onClose()
                 }
+                TvButton("Mover para outro grupo", modifier = Modifier.fillMaxWidth()) { moveOpen = true }
                 TvButton("Desativar (esconder da lista)", modifier = Modifier.fillMaxWidth()) {
                     vm.setDisabled(listOf(item.ch.key), true)
                     onClose()

@@ -142,6 +142,7 @@ private fun ManageRow(
     onAction: () -> Unit,
     vm: MainViewModel,
 ) {
+    var moveOpen by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -173,6 +174,8 @@ private fun ManageRow(
                     vm.setDisabled(listOf(item.ch.key), true, withUndo = false)
                 }
                 Spacer(Modifier.width(10.dp))
+                TvButton("Mover") { moveOpen = true }
+                Spacer(Modifier.width(10.dp))
                 TvButton("Excluir", danger = true) {
                     onAction()
                     vm.delete(listOf(item.ch.key))
@@ -183,6 +186,8 @@ private fun ManageRow(
                     onAction()
                     vm.setDisabled(listOf(item.ch.key), false, withUndo = false)
                 }
+                Spacer(Modifier.width(10.dp))
+                TvButton("Mover") { moveOpen = true }
                 Spacer(Modifier.width(10.dp))
                 TvButton("Excluir", danger = true) {
                     onAction()
@@ -197,6 +202,7 @@ private fun ManageRow(
             }
         }
     }
+    if (moveOpen) TvMoveGroupDialog(vm, listOf(item.ch.key)) { moveOpen = false }
 }
 
 @Composable
