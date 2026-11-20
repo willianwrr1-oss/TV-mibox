@@ -177,8 +177,9 @@ fun TvSettingsScreen(vm: MainViewModel) {
             TvActionRow("Importar arquivo M3U do aparelho", "Escolhe o arquivo no sistema; só entram canais novos") {
                 startImport()
             }
-            TvActionRow("Restaurar fontes originais", "Volta só para IPTV-org, CatTV e PublicDomainM3U (filmes e séries)") {
+            TvActionRow("Restaurar fontes originais", "Volta às quatro fontes originais e traz de volta os canais excluídos e desativados") {
                 Repo.resetSources()
+                Repo.restoreAllChannels()
                 vm.refresh(true)
             }
             TvActionRow("Resetar lista de canais", "Volta tudo ao inicial: fontes originais, sem canais importados nem escolhas", danger = true) {
