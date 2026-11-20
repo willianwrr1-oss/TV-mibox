@@ -149,6 +149,16 @@ object Repo {
 
     fun updateState(key: String, f: (ChannelState) -> ChannelState) = updateStates(listOf(key), f)
 
+    /** Volta a lista de canais ao estado inicial: fontes originais, sem canais manuais e sem escolhas. */
+    fun resetChannelList() {
+        resetSources()
+        manual = emptyList()
+        persistManual()
+        _states.value = emptyMap()
+        persistStates()
+        scope.launch { reload() }
+    }
+
     fun resetHistory() {
         val keys = _states.value.keys.toList()
         updateStates(keys) { it.copy(plays = 0, lastPlayed = 0L) }
@@ -230,8 +240,7 @@ object Repo {
 
     /** Nome mostrado na guia de origem: fonte cadastrada, arquivo importado ou "Meus canais". */
     fun originName(sourceId: String): String = when {
-        sourceId.startsWith("imp:") -> sourceId.removePrefix("imp:")
-        sourceId == "manual" -> "Meus canais"
+        sourceId == "manual" || sourceId.startsWith("imp:") -> "Minha lista"
         else -> _sources.value.firstOrNull { it.id == sourceId }?.name ?: sourceId
     }
 
@@ -324,7 +333,7 @@ object Repo {
      * em qualquer fonte, ativa ou não). Devolve (novos, ignorados).
      */
     fun importM3u(text: String, listName: String): Pair<Int, Int> {
-        val parsed = M3uParser.parse(text, "imp:" + listName, keyPrefix = "m:")
+        val parsed = M3uParser.parse(text, "manual", keyPrefix = "m:")
         val have = _channels.value + manual
         val names = HashSet<String>()
         val ids = HashSet<String>()
@@ -408,7 +417,7 @@ object Repo {
                         quality = o.optString("q", "").ifBlank { null },
                         geoBlocked = false,
                         not247 = false,
-                        sourceId = o.optString("sid", "manual").ifBlank { "manual" },
+                        sourceId = "manual",
                     )
                 )
             }

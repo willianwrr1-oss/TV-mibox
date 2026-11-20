@@ -33,6 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.willian.tvaberta.MainViewModel
 import com.willian.tvaberta.data.ChannelItem
@@ -47,6 +55,9 @@ fun TvManageScreen(vm: MainViewModel) {
     var tab by remember { mutableIntStateOf(0) }
     var addOpen by remember { mutableStateOf(false) }
     var refocus by remember { mutableIntStateOf(-1) }
+    var selectMode by remember { mutableStateOf(false) }
+    var sel by remember { mutableStateOf(setOf<String>()) }
+    var moveKeys by remember { mutableStateOf<List<String>?>(null) }
 
     val active = remember(all) { all.filter { !it.st.deleted && !it.st.disabled }.sortedBy { it.title.lowercase() } }
     val disabled = remember(all) { all.filter { !it.st.deleted && it.st.disabled }.sortedBy { it.title.lowercase() } }
@@ -87,6 +98,13 @@ fun TvManageScreen(vm: MainViewModel) {
                 item { TvButton("Excluídos (${deleted.size})", selected = tab == 2) { tab = 2 } }
             }
             Spacer(Modifier.width(10.dp))
+            if (tab != 2 && list.isNotEmpty()) {
+                TvButton(if (selectMode) "Concluir seleção" else "Selecionar vários", selected = selectMode) {
+                    selectMode = !selectMode
+                    sel = emptySet()
+                }
+                Spacer(Modifier.width(10.dp))
+            }
             if (tab == 1 && disabled.isNotEmpty()) {
                 TvButton("Ativar todos") { vm.setDisabled(disabled.map { it.ch.key }, false, withUndo = false) }
                 Spacer(Modifier.width(10.dp))
@@ -98,6 +116,30 @@ fun TvManageScreen(vm: MainViewModel) {
             TvButton("Excluir duplicados") { vm.removeDuplicates() }
             Spacer(Modifier.width(10.dp))
             TvButton("Adicionar canal", icon = Icons.Default.Add) { addOpen = true }
+        }
+        if (selectMode && tab != 2) {
+            TvSpacer(8)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TvButton(if (sel.size == list.size) "Limpar seleção" else "Marcar todos (" + list.size + ")") {
+                    sel = if (sel.size == list.size) emptySet() else list.map { it.ch.key }.toSet()
+                }
+                Spacer(Modifier.width(10.dp))
+                if (sel.isNotEmpty()) {
+                    TvButton("Excluir (" + sel.size + ")", danger = true) {
+                        vm.requestDelete(sel.toList())
+                        sel = emptySet()
+                        selectMode = false
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    TvButton(if (tab == 0) "Desativar (" + sel.size + ")" else "Ativar (" + sel.size + ")") {
+                        vm.setDisabled(sel.toList(), tab == 0)
+                        sel = emptySet()
+                        selectMode = false
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    TvButton("Mover (" + sel.size + ")") { moveKeys = sel.toList() }
+                }
+            }
         }
         TvSpacer(10)
 
@@ -117,6 +159,13 @@ fun TvManageScreen(vm: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(list, key = { _, it -> it.ch.key }) { index, item ->
+                    if (selectMode && tab != 2) {
+                        val checked = item.ch.key in sel
+                        SelectRow(item, s, checked) {
+                            sel = if (checked) sel - item.ch.key else sel + item.ch.key
+                        }
+                        return@itemsIndexed
+                    }
                     ManageRow(
                         item = item,
                         tab = tab,
@@ -131,6 +180,52 @@ fun TvManageScreen(vm: MainViewModel) {
     }
 
     if (addOpen) AddChannelDialog(vm) { addOpen = false }
+    val mk = moveKeys
+    if (mk != null) {
+        TvMoveGroupDialog(vm, mk) {
+            moveKeys = null
+            sel = emptySet()
+            selectMode = false
+        }
+    }
+}
+
+@Composable
+private fun SelectRow(
+    item: ChannelItem,
+    s: com.willian.tvaberta.data.AppSettings,
+    checked: Boolean,
+    onToggle: () -> Unit,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .tvClickable(shape, onClick = onToggle)
+            .background(
+                if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                else MaterialTheme.colorScheme.surfaceVariant,
+                shape
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(14.dp))
+        ChannelLogo(item, s.showLogos, Modifier.size(44.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(
+            item.title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

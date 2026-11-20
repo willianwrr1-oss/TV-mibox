@@ -38,6 +38,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
     val sources by Repo.sources.collectAsState()
     val loadingEpg by Epg.loading.collectAsState()
     var pickCountry by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
     var customDialog by remember { mutableStateOf(false) }
     var editUrls by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -176,6 +177,9 @@ fun TvSettingsScreen(vm: MainViewModel) {
                 Repo.resetSources()
                 vm.refresh(true)
             }
+            TvActionRow("Resetar lista de canais", "Volta tudo ao inicial: fontes originais, sem canais importados nem escolhas", danger = true) {
+                confirmReset = true
+            }
         }
 
         TvSection("Dados") {
@@ -209,6 +213,28 @@ fun TvSettingsScreen(vm: MainViewModel) {
         }
     }
 
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Resetar a lista de canais?") },
+            text = {
+                Text(
+                    "Volta ao inicial: só as quatro fontes originais (IPTV-org, CatTV, PublicDomainM3U filmes e séries). " +
+                        "Apaga os canais que você importou ou adicionou, e também favoritos, canais desativados, " +
+                        "excluídos, renomeados e grupos que você mudou."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmReset = false
+                    Repo.resetChannelList()
+                    vm.refresh(true)
+                    vm.toast("Lista de canais resetada.")
+                }) { Text("Resetar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancelar") } }
+        )
+    }
     if (pickCountry) {
         val have = sources.map { it.id }.toSet()
         AlertDialog(
