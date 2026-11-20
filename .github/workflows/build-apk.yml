@@ -1,0 +1,38 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compilar o APK
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Renomear o APK para TvAbertaTV.apk
+        run: |
+          mkdir -p saida
+          cp app/build/outputs/apk/release/*.apk saida/TvAbertaTV.apk
+
+      - name: Guardar o APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TvAbertaTV
+          path: saida/TvAbertaTV.apk
