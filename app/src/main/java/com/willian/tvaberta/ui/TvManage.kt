@@ -1,0 +1,230 @@
+package com.willian.tvaberta.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.willian.tvaberta.MainViewModel
+import com.willian.tvaberta.data.ChannelItem
+import com.willian.tvaberta.data.SettingsStore
+import kotlinx.coroutines.delay
+
+/** Gerenciar: ativos, desativados e excluídos, com botões grandes para o controle remoto. */
+@Composable
+fun TvManageScreen(vm: MainViewModel) {
+    val all by vm.items.collectAsState()
+    val s by SettingsStore.flow.collectAsState()
+    var tab by remember { mutableIntStateOf(0) }
+    var addOpen by remember { mutableStateOf(false) }
+    var refocus by remember { mutableIntStateOf(-1) }
+
+    val active = remember(all) { all.filter { !it.st.deleted && !it.st.disabled }.sortedBy { it.title.lowercase() } }
+    val disabled = remember(all) { all.filter { !it.st.deleted && it.st.disabled }.sortedBy { it.title.lowercase() } }
+    val deleted = remember(all) { all.filter { it.st.deleted }.sortedBy { it.title.lowercase() } }
+    val list = when (tab) {
+        0 -> active
+        1 -> disabled
+        else -> deleted
+    }
+
+    val firstChip = remember { FocusRequester() }
+    val rowReq = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        if (vm.focusPending) {
+            delay(150)
+            runCatching { firstChip.requestFocus() }
+            vm.focusPending = false
+        }
+    }
+    // Depois de agir num canal, o foco continua na mesma posição da lista.
+    LaunchedEffect(list.size) {
+        if (refocus >= 0 && list.isNotEmpty()) {
+            delay(120)
+            runCatching { rowReq.requestFocus() }
+        }
+        refocus = -1
+    }
+    val target = if (refocus >= 0) refocus.coerceAtMost(list.size - 1) else -1
+
+    Column(Modifier.fillMaxSize()) {
+        TvTitle("Gerenciar canais", "Desative para esconder, exclua para não voltar mais. Dá para restaurar.")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item { TvButton("Ativos (${active.size})", selected = tab == 0, requester = firstChip) { tab = 0 } }
+                item { TvButton("Desativados (${disabled.size})", selected = tab == 1) { tab = 1 } }
+                item { TvButton("Excluídos (${deleted.size})", selected = tab == 2) { tab = 2 } }
+            }
+            Spacer(Modifier.width(10.dp))
+            if (tab == 1 && disabled.isNotEmpty()) {
+                TvButton("Ativar todos") { vm.setDisabled(disabled.map { it.ch.key }, false, withUndo = false) }
+                Spacer(Modifier.width(10.dp))
+            }
+            if (tab == 2 && deleted.isNotEmpty()) {
+                TvButton("Restaurar todos") { vm.restore(deleted.map { it.ch.key }) }
+                Spacer(Modifier.width(10.dp))
+            }
+            TvButton("Adicionar canal", icon = Icons.Default.Add) { addOpen = true }
+        }
+        TvSpacer(10)
+
+        if (list.isEmpty()) {
+            TvEmpty(
+                when (tab) {
+                    0 -> "Nenhum canal ativo"
+                    1 -> "Nenhum canal desativado"
+                    else -> "Nenhum canal excluído"
+                },
+                if (tab == 0) "Atualize a lista na tela Canais." else "Quando você desativar ou excluir canais, eles aparecem aqui."
+            )
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(list, key = { _, it -> it.ch.key }) { index, item ->
+                    ManageRow(
+                        item = item,
+                        tab = tab,
+                        s = s,
+                        requester = if (index == target) rowReq else null,
+                        onAction = { refocus = index },
+                        vm = vm
+                    )
+                }
+            }
+        }
+    }
+
+    if (addOpen) AddChannelDialog(vm) { addOpen = false }
+}
+
+@Composable
+private fun ManageRow(
+    item: ChannelItem,
+    tab: Int,
+    s: com.willian.tvaberta.data.AppSettings,
+    requester: FocusRequester?,
+    onAction: () -> Unit,
+    vm: MainViewModel,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ChannelLogo(item, s.showLogos, Modifier.size(52.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                item.ch.groups.joinToString(" · ") { catLabel(it) },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        when (tab) {
+            0 -> {
+                TvButton("Desativar", requester = requester) {
+                    onAction()
+                    vm.setDisabled(listOf(item.ch.key), true, withUndo = false)
+                }
+                Spacer(Modifier.width(10.dp))
+                TvButton("Excluir", danger = true) {
+                    onAction()
+                    vm.delete(listOf(item.ch.key))
+                }
+            }
+            1 -> {
+                TvButton("Ativar", requester = requester) {
+                    onAction()
+                    vm.setDisabled(listOf(item.ch.key), false, withUndo = false)
+                }
+                Spacer(Modifier.width(10.dp))
+                TvButton("Excluir", danger = true) {
+                    onAction()
+                    vm.delete(listOf(item.ch.key))
+                }
+            }
+            else -> {
+                TvButton("Restaurar", requester = requester) {
+                    onAction()
+                    vm.restore(listOf(item.ch.key))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddChannelDialog(vm: MainViewModel, onClose: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    val valid = name.isNotBlank() && (url.trim().startsWith("http://") || url.trim().startsWith("https://"))
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Adicionar canal") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Nome do canal") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = url, onValueChange = { url = it },
+                    label = { Text("Link do vídeo (http ou https)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                vm.addChannel(name.trim(), url.trim(), "Meus canais", "")
+                onClose()
+            }) { Text("Adicionar") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } }
+    )
+}
