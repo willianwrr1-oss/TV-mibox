@@ -131,6 +131,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
             TvSwitchRow("Confirmar antes de excluir", "Pergunta antes de remover canais", s.confirmDelete) { v ->
                 SettingsStore.update { it.copy(confirmDelete = v) }
             }
+            TvActionRow("Excluir canais duplicados", "Mantém um de cada (mesmo nome ou link)") { vm.removeDuplicates() }
         }
 
         TvSection("Guia de programação") {

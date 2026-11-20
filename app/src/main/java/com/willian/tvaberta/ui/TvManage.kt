@@ -95,6 +95,8 @@ fun TvManageScreen(vm: MainViewModel) {
                 TvButton("Restaurar todos") { vm.restore(deleted.map { it.ch.key }) }
                 Spacer(Modifier.width(10.dp))
             }
+            TvButton("Excluir duplicados") { vm.removeDuplicates() }
+            Spacer(Modifier.width(10.dp))
             TvButton("Adicionar canal", icon = Icons.Default.Add) { addOpen = true }
         }
         TvSpacer(10)
