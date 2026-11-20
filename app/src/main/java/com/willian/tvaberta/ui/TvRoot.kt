@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -91,10 +92,16 @@ fun TvRoot(vm: MainViewModel) {
             if (vm.tab != railPick) vm.tab = railPick
         }
 
-        BackHandler(enabled = !playing && vm.tab != 0) {
-            vm.tab = 0
-            railPick = 0
-            vm.focusPending = true
+        var exitAsk by remember { mutableStateOf(false) }
+        val ctx = LocalContext.current
+        BackHandler(enabled = !playing) {
+            if (vm.tab != 0) {
+                vm.tab = 0
+                railPick = 0
+                vm.focusPending = true
+            } else {
+                exitAsk = true
+            }
         }
 
         Box(
@@ -147,6 +154,24 @@ fun TvRoot(vm: MainViewModel) {
 
         RenameDialog(vm)
         DeleteDialog(vm)
+        if (exitAsk) {
+            val stay = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                delay(150)
+                runCatching { stay.requestFocus() }
+            }
+            AlertDialog(
+                onDismissRequest = { exitAsk = false },
+                title = { Text("Fechar o aplicativo?") },
+                text = { Text("Deseja realmente sair do TV Aberta?") },
+                confirmButton = {
+                    TvButton("Sim, fechar", danger = true) { ctx.findActivity()?.finish() }
+                },
+                dismissButton = {
+                    TvButton("Cancelar", requester = stay) { exitAsk = false }
+                }
+            )
+        }
     }
 }
 

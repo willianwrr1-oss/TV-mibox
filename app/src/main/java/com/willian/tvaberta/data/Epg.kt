@@ -39,6 +39,10 @@ object Epg {
 
     private lateinit var ctx: Context
 
+    /** Motivo da última falha de download, para mostrar ao usuário. */
+    @Volatile
+    var lastError: String? = null
+
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
@@ -113,7 +117,7 @@ object Epg {
                         }
                         ok++
                     } catch (e: Exception) {
-                        // este guia falhou; os outros continuam
+                        lastError = (e.message ?: e.javaClass.simpleName)
                     }
                 }
             }

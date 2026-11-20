@@ -47,6 +47,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // Posição das linhas de guias: sobrevive à ida e volta do player.
+    val catListState = androidx.compose.foundation.lazy.LazyListState()
+    val originListState = androidx.compose.foundation.lazy.LazyListState()
+
     val query = MutableStateFlow("")
     val category = MutableStateFlow<String?>(null)
     val origin = MutableStateFlow<String?>(null)
@@ -106,9 +110,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val ok = Epg.refresh(urls)
         if (ok > 0) {
             SettingsStore.update { it.copy(lastEpgRefresh = System.currentTimeMillis()) }
-            if (manual) toast("Guia de programação atualizado.")
+            if (manual) {
+                val n = items.value.count { !it.st.deleted && Epg.programmes(it.ch).isNotEmpty() }
+                if (n > 0) toast("Guia atualizado: " + n + " canais com programação.")
+                else toast("Guia baixado, mas nenhum dos seus canais consta nele. Troque o link em Ajustes > Guia.")
+            }
         } else if (manual) {
-            toast("Não foi possível baixar o guia. Verifique o link e a conexão.")
+            toast("Não foi possível baixar o guia (" + (Epg.lastError ?: "sem detalhe") + ").")
         }
     }
 

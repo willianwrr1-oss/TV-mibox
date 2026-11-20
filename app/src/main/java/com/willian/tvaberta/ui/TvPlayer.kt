@@ -179,9 +179,21 @@ fun TvPlayerScreen(vm: MainViewModel) {
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                tick++
                 val k = e.key
+                // Menu: só alterna o menu uma vez por toque; segurar ou soltar não faz mais nada.
+                if (k == Key.Menu) {
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
+                        tick++
+                        mode = if (mode == 2) 0 else 2
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // OK segurado não repete ação.
+                if (e.nativeKeyEvent.repeatCount > 0 &&
+                    (k == Key.DirectionCenter || k == Key.Enter || k == Key.NumPadEnter)
+                ) return@onPreviewKeyEvent true
+                tick++
                 when {
                     k == Key.MediaPlayPause || k == Key.MediaPlay || k == Key.MediaPause -> {
                         pc.togglePlayPause()

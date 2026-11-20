@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,7 +57,18 @@ fun TvGuideScreen(vm: MainViewModel) {
     val version by Epg.version.collectAsState()
     val loading by Epg.loading.collectAsState()
 
-    val now = System.currentTimeMillis()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    // Ao abrir o guia, atualiza sozinho se os dados estiverem velhos (mais de 3 horas) ou ausentes.
+    LaunchedEffect(Unit) {
+        val last = SettingsStore.value.lastEpgRefresh
+        if (s.epgEnabled && (System.currentTimeMillis() - last > 3 * 3_600_000L)) vm.refreshEpg(false)
+    }
     val start = remember(version, now / 600_000L) {
         val base = now - BACK_MIN * 60_000L
         base - (base % 1_800_000L)

@@ -88,6 +88,7 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
     val headerReq = remember { FocusRequester() }
     var menuTarget by remember { mutableStateOf<ChannelItem?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
+    var catMenu by remember { mutableStateOf<String?>(null) }
 
     // Índice que recebe o foco ao abrir a tela ou ao voltar do player.
     val target = if (vm.focusPending) visible.indexOfFirst { it.ch.key == vm.lastFocusKey }.let { if (it < 0) 0 else it } else -1
@@ -127,6 +128,7 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
 
         if (origins.size > 1) {
             LazyRow(
+                state = vm.originListState,
                 contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -141,14 +143,15 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
 
         if (s.showCategoryChips && cats.size > 1) {
             LazyRow(
+                state = vm.catListState,
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
                     TvButton("Todos", selected = cat == null) { vm.category.value = null }
                 }
-                items(cats.take(30)) { c ->
-                    TvButton(catLabel(c), selected = cat == c) { vm.category.value = c }
+                items(cats.take(60)) { c ->
+                    TvButton(catLabel(c), selected = cat == c, onLongClick = { catMenu = c }) { vm.category.value = c }
                 }
             }
         }
@@ -183,6 +186,35 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
         }
     }
 
+    val cm = catMenu
+    if (cm != null) {
+        val keys = base.filter { cm in it.ch.groups }.map { it.ch.key }
+        val safe = remember { FocusRequester() }
+        LaunchedEffect(cm) {
+            delay(150)
+            runCatching { safe.requestFocus() }
+        }
+        AlertDialog(
+            onDismissRequest = { catMenu = null },
+            title = { Text(catLabel(cm)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(keys.size.toString() + " canais nesta categoria" + if (org != null) " (na lista escolhida)." else ".")
+                    TvButton("Cancelar", modifier = Modifier.fillMaxWidth(), requester = safe) { catMenu = null }
+                    TvButton("Desativar os " + keys.size + " canais", modifier = Modifier.fillMaxWidth()) {
+                        vm.setDisabled(keys, true)
+                        catMenu = null
+                    }
+                    TvButton("Excluir os " + keys.size + " canais", modifier = Modifier.fillMaxWidth(), danger = true) {
+                        vm.requestDelete(keys)
+                        if (vm.category.value == cm) vm.category.value = null
+                        catMenu = null
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
     val mt = menuTarget
     if (mt != null) {
         ChannelMenuDialog(vm, mt) { menuTarget = null }

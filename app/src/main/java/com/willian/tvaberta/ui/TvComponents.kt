@@ -61,6 +61,9 @@ fun Modifier.tvClickable(
 ): Modifier {
     var focused by remember { mutableStateOf(false) }
     val flag = remember { LongFlag() }
+    // Itens recém-criados (menus, janelas) ignoram o OK por um instante: evita acionar sem querer
+    // a primeira opção quando o botão que abriu o menu ainda está apertado.
+    val born = remember { System.currentTimeMillis() }
     val scale by animateFloatAsState(if (focused) 1.05f else 1f, label = "tvscale")
     return this
         .graphicsLayer {
@@ -69,17 +72,21 @@ fun Modifier.tvClickable(
         }
         .border(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent, shape)
         .onPreviewKeyEvent { e ->
-            if (onLongClick == null || !focused) return@onPreviewKeyEvent false
+            if (!focused) return@onPreviewKeyEvent false
             val k = e.key
             val ok = k == Key.DirectionCenter || k == Key.Enter || k == Key.NumPadEnter
             when {
-                k == Key.Menu && e.type == KeyEventType.KeyUp -> {
-                    onLongClick()
+                // Tecla Menu: abre as ações na hora; soltar ou segurar não faz mais nada.
+                k == Key.Menu && onLongClick != null -> {
+                    if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) onLongClick()
                     true
                 }
-                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.isLongPress -> {
-                    flag.fired = true
-                    onLongClick()
+                // OK segurado: repetições nunca viram novos cliques; a primeira dispara o menu.
+                ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
+                    if (onLongClick != null && !flag.fired && e.nativeKeyEvent.isLongPress) {
+                        flag.fired = true
+                        onLongClick()
+                    }
                     true
                 }
                 ok && e.type == KeyEventType.KeyUp && flag.fired -> {
@@ -93,7 +100,10 @@ fun Modifier.tvClickable(
             focused = it.isFocused
             onFocus?.invoke(it.isFocused)
         }
-        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        .combinedClickable(
+            onClick = { if (System.currentTimeMillis() - born > 450L) onClick() },
+            onLongClick = onLongClick
+        )
 }
 
 @Composable
@@ -104,15 +114,20 @@ fun TvButton(
     danger: Boolean = false,
     selected: Boolean = false,
     requester: FocusRequester? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(12.dp)
+    var focused by remember { mutableStateOf(false) }
     val bg = when {
+        focused && danger -> Color(0xFFB3261E)
+        focused -> Color(0xFF2E7D32)
         danger -> Color(0xFF5A1D22)
         selected -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val fg = when {
+        focused -> Color.White
         danger -> Color(0xFFFFB4B4)
         selected -> Color.White
         else -> MaterialTheme.colorScheme.onSurface
@@ -120,7 +135,7 @@ fun TvButton(
     Row(
         modifier
             .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
-            .tvClickable(shape, onClick = onClick)
+            .tvClickable(shape, onFocus = { focused = it }, onLongClick = onLongClick, onClick = onClick)
             .background(bg, shape)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
