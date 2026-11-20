@@ -312,6 +312,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Importa um arquivo M3U escolhido no navegador de pastas do próprio app. */
+    fun importM3uFile(file: java.io.File) {
+        viewModelScope.launch {
+            val res: Pair<Int, Int>? = withContext(Dispatchers.IO) {
+                try {
+                    Repo.importM3u(file.readText(), file.nameWithoutExtension)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (res == null) {
+                toast("Não foi possível ler o arquivo.")
+            } else if (res.first == 0) {
+                toast("Nenhum canal novo: " + res.second + " já existiam.")
+            } else {
+                toast(res.first.toString() + " canais novos importados, " + res.second + " ignorados (já existiam).")
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ fontes e dados
 
     fun addCountry(code: String, name: String) {

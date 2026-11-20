@@ -53,9 +53,7 @@ fun TvManageScreen(vm: MainViewModel) {
     var tab by remember { mutableIntStateOf(0) }
     var addOpen by remember { mutableStateOf(false) }
     var refocus by remember { mutableIntStateOf(-1) }
-    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri -> if (uri != null) vm.importM3u(uri) }
+    val startImport = rememberTvM3uImport(vm)
     var selectMode by remember { mutableStateOf(false) }
     var sel by remember { mutableStateOf(setOf<String>()) }
     var moveKeys by remember { mutableStateOf<List<String>?>(null) }
@@ -115,11 +113,7 @@ fun TvManageScreen(vm: MainViewModel) {
                 Spacer(Modifier.width(10.dp))
             }
             TvButton("Importar M3U") {
-                try {
-                    picker.launch(arrayOf("*/*"))
-                } catch (e: Exception) {
-                    vm.toast("Este aparelho não tem seletor de arquivos. Use a opção por link.")
-                }
+                startImport()
             }
             Spacer(Modifier.width(10.dp))
             TvButton("Excluir duplicados") { vm.removeDuplicates() }

@@ -38,9 +38,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
     val sources by Repo.sources.collectAsState()
     val loadingEpg by Epg.loading.collectAsState()
     var pickCountry by remember { mutableStateOf(false) }
-    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri -> if (uri != null) vm.importM3u(uri) }
+    val startImport = rememberTvM3uImport(vm)
     var confirmResetList by remember { mutableStateOf(false) }
     var customDialog by remember { mutableStateOf(false) }
     var editUrls by remember { mutableStateOf(false) }
@@ -157,7 +155,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
                 "Última atualização: " + formatDateTime(s.lastEpgRefresh)
             ) { if (!loadingEpg) vm.refreshEpg(true) }
             TvActionRow("Links do guia (XMLTV)", Epg.urlList(s.epgUrls).size.toString() + " link(s). OK para editar") { editUrls = true }
-            TvActionRow("Voltar ao link padrão do guia", "Guia do Brasil do projeto iptv-com/epg") {
+            TvActionRow("Voltar ao link padrão do guia", "Guia do Brasil (epgshare01 e BrazilTVEPG)") {
                 SettingsStore.update { it.copy(epgUrls = Epg.DEFAULT_URL) }
                 vm.toast("Link padrão restaurado.")
             }
@@ -177,11 +175,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
             TvActionRow("Adicionar país", "Lista oficial de canais do iptv-org por país") { pickCountry = true }
             TvActionRow("Adicionar lista M3U por link", "Digite o endereço de uma lista") { customDialog = true }
             TvActionRow("Importar arquivo M3U do aparelho", "Escolhe o arquivo no sistema; só entram canais novos") {
-                try {
-                    picker.launch(arrayOf("*/*"))
-                } catch (e: Exception) {
-                    vm.toast("Este aparelho não tem seletor de arquivos. Use a opção por link.")
-                }
+                startImport()
             }
             TvActionRow("Restaurar fontes originais", "Volta só para IPTV-org, CatTV e PublicDomainM3U (filmes e séries)") {
                 Repo.resetSources()
