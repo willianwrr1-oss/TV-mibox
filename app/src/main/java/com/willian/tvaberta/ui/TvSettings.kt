@@ -38,7 +38,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
     val sources by Repo.sources.collectAsState()
     val loadingEpg by Epg.loading.collectAsState()
     var pickCountry by remember { mutableStateOf(false) }
-    var confirmReset by remember { mutableStateOf(false) }
+    var confirmResetList by remember { mutableStateOf(false) }
     var customDialog by remember { mutableStateOf(false) }
     var editUrls by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -178,7 +178,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
                 vm.refresh(true)
             }
             TvActionRow("Resetar lista de canais", "Volta tudo ao inicial: fontes originais, sem canais importados nem escolhas", danger = true) {
-                confirmReset = true
+                confirmResetList = true
             }
         }
 
@@ -213,9 +213,9 @@ fun TvSettingsScreen(vm: MainViewModel) {
         }
     }
 
-    if (confirmReset) {
+    if (confirmResetList) {
         AlertDialog(
-            onDismissRequest = { confirmReset = false },
+            onDismissRequest = { confirmResetList = false },
             title = { Text("Resetar a lista de canais?") },
             text = {
                 Text(
@@ -226,13 +226,13 @@ fun TvSettingsScreen(vm: MainViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    confirmReset = false
+                    confirmResetList = false
                     Repo.resetChannelList()
                     vm.refresh(true)
                     vm.toast("Lista de canais resetada.")
                 }) { Text("Resetar", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { confirmResetList = false }) { Text("Cancelar") } }
         )
     }
     if (pickCountry) {

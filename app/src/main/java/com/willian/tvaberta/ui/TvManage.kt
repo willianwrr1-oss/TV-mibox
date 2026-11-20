@@ -35,11 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.willian.tvaberta.MainViewModel
