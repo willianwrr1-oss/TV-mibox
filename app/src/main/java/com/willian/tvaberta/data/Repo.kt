@@ -6,6 +6,9 @@ import android.util.JsonToken
 import android.util.JsonWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +48,20 @@ object Repo {
     private val loadLock = Mutex()
     private val wlock = Any()
     private var loaded = false
+
+    private const val MAX_M3U_BYTES = 512L * 1024L * 1024L
+
+    private fun copyLimited(input: InputStream, output: OutputStream, maxBytes: Long) {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > maxBytes) throw IOException("Arquivo excede o limite de tamanho permitido")
+            output.write(buffer, 0, read)
+        }
+    }
 
     private val dbLazy = lazy { ChannelDb(ctx) }
     val db: ChannelDb get() = dbLazy.value
@@ -251,16 +268,25 @@ object Repo {
     /** Lê um arquivo M3U de uma fonte para dentro do banco (troca o que havia dessa fonte). */
     private fun importSourceFile(id: String, f: File) {
         synchronized(wlock) {
-            f.bufferedReader().use { r ->
-                db.inTx {
-                    db.deleteSrc(id)
-                    M3uParser.parseLines(r.lineSequence(), id, "") { c -> db.put(c, null, true) }
-                    db.reapplyCustomGroups()
+            try {
+                f.bufferedReader().use { r ->
+                    db.inTx {
+                        db.deleteSrc(id)
+                        var imported = 0
+                        M3uParser.parseLines(r.lineSequence(), id, "") { c ->
+                            db.put(c, null, true)
+                            imported++
+                        }
+                        if (imported == 0) throw IOException("A lista não contém canais M3U válidos")
+                        db.reapplyCustomGroups()
+                    }
                 }
+            } finally {
+                db.releaseStatements()
             }
-            db.releaseStatements()
         }
     }
+
 
     /** Refaz o catálogo a partir das listas em cache. */
     suspend fun reload() = withContext(Dispatchers.IO) {
@@ -291,37 +317,45 @@ object Repo {
             ensureLoaded()
             withContext(Dispatchers.IO) {
                 for (src in _sources.value) {
+                    currentCoroutineContext().ensureActive()
                     if (!src.enabled) continue
+                    val target = File(listsDir(), src.id + ".m3u")
+                    val tmp = File(listsDir(), src.id + ".tmp")
                     try {
                         val req = Request.Builder()
                             .url(src.url)
                             .header("User-Agent", "TVAberta/1.0")
                             .build()
-                        val target = File(listsDir(), src.id + ".m3u")
-                        val tmp = File(listsDir(), src.id + ".tmp")
                         client.newCall(req).execute().use { r ->
                             if (!r.isSuccessful) throw IOException("HTTP " + r.code)
                             val body = r.body ?: throw IOException("vazio")
-                            body.byteStream().use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                            val length = body.contentLength()
+                            if (length > MAX_M3U_BYTES) throw IOException("Lista excede o limite de tamanho permitido")
+                            body.byteStream().use { input ->
+                                tmp.outputStream().use { output -> copyLimited(input, output, MAX_M3U_BYTES) }
+                            }
                         }
+                        currentCoroutineContext().ensureActive()
                         val head = tmp.bufferedReader().use { r ->
                             val buf = CharArray(4000)
                             val n = r.read(buf)
                             if (n > 0) String(buf, 0, n) else ""
                         }
-                        if (!head.contains("#EXTM3U")) {
-                            tmp.delete()
-                            throw IOException("não é uma lista M3U")
-                        }
+                        if (!head.contains("#EXTM3U")) throw IOException("não é uma lista M3U")
+                        // Importa o temporário antes de substituir o cache válido anterior.
+                        importSourceFile(src.id, tmp)
                         if (!tmp.renameTo(target)) {
                             tmp.copyTo(target, overwrite = true)
                             tmp.delete()
                         }
-                        importSourceFile(src.id, target)
                         bumpData()
                         ok++
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         fail++
+                    } finally {
+                        if (tmp.exists()) tmp.delete()
                     }
                 }
             }
@@ -333,6 +367,7 @@ object Repo {
         }
         return RefreshResult(ok, fail)
     }
+
 
     fun clearListCache() {
         listsDir().listFiles()?.forEach { it.delete() }
@@ -679,8 +714,8 @@ object Repo {
 
     // ---------------------------------------------------------------- consultas auxiliares
 
-    fun flt(s: AppSettings, src: String? = null, q: String? = null): Flt =
-        Flt(hideGeo = s.hideGeoBlocked, hideN247 = s.hideNot247, src = src, q = q)
+    fun flt(s: AppSettings, src: String? = null, q: String? = null, kind: Int? = null): Flt =
+        Flt(hideGeo = s.hideGeoBlocked, hideN247 = s.hideNot247, src = src, q = q, kind = kind)
 
     /** Canal + escolhas atuais (nome, grupo e favorito vêm da tabela de escolhas em memória). */
     fun item(ch: Channel, map: Map<String, ChannelState> = _states.value): ChannelItem {

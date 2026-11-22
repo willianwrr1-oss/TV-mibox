@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -58,7 +59,7 @@ import kotlinx.coroutines.launch
 private class RailTab(val label: String, val icon: ImageVector)
 
 private val railTabs = listOf(
-    RailTab("Canais", Icons.Default.LiveTv),
+    RailTab("Início", Icons.Default.Home),
     RailTab("Guia", Icons.Default.Schedule),
     RailTab("Favoritos", Icons.Default.Star),
     RailTab("Gerenciar", Icons.Default.Tune),
@@ -104,6 +105,9 @@ fun TvRoot(vm: MainViewModel) {
                 vm.tab = 0
                 railPick = 0
                 vm.focusPending = true
+            } else if (vm.area != null) {
+                vm.openArea(null)
+                vm.focusPending = true
             } else {
                 exitAsk = true
             }
@@ -123,7 +127,7 @@ fun TvRoot(vm: MainViewModel) {
                         .padding(horizontal = 40.dp, vertical = 24.dp)
                 ) {
                     Rail(vm, onPick = { railPick = it })
-                    Spacer(Modifier.width(28.dp))
+                    Spacer(Modifier.width(20.dp))
                     Box(
                         Modifier
                             .weight(1f)
@@ -131,7 +135,7 @@ fun TvRoot(vm: MainViewModel) {
                     ) {
                         key(vm.tab) {
                             when (vm.tab) {
-                                0 -> TvLiveScreen(vm)
+                                0 -> if (vm.area == null) TvHomeScreen(vm) else TvLiveScreen(vm)
                                 1 -> TvGuideScreen(vm)
                                 2 -> TvChannelsScreen(vm, favoritesOnly = true)
                                 3 -> TvManageScreen(vm)
@@ -188,17 +192,15 @@ private fun Rail(vm: MainViewModel, onPick: (Int) -> Unit) {
     val requesters = remember { List(railTabs.size) { FocusRequester() } }
     Column(
         Modifier
-            .width(190.dp)
+            .width(72.dp)
             .fillMaxHeight()
             // Ao voltar para o menu pela esquerda, o foco cai no item da tela atual.
             .focusProperties { enter = { requesters[vm.tab.coerceIn(0, requesters.lastIndex)] } }
             .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, bottom = 14.dp)) {
-            Icon(Icons.Default.LiveTv, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("TV Aberta", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Box(Modifier.fillMaxWidth().padding(bottom = 14.dp), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.LiveTv, contentDescription = "TV Aberta", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
         }
         railTabs.forEachIndexed { i, t ->
             val selected = vm.tab == i
@@ -209,6 +211,7 @@ private fun Rail(vm: MainViewModel, onPick: (Int) -> Unit) {
                     .focusRequesterOf(requesters[i])
                     .tvClickable(shape, onFocus = { if (it) onPick(i) }) {
                         onPick(i)
+                        if (i == 0 && vm.tab == 0) vm.openArea(null)
                         vm.tab = i
                         scope.launch {
                             delay(150)
@@ -220,15 +223,15 @@ private fun Rail(vm: MainViewModel, onPick: (Int) -> Unit) {
                         else MaterialTheme.colorScheme.surfaceVariant,
                         shape
                     )
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Icon(t.icon, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    t.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                Icon(
+                    t.icon,
+                    contentDescription = t.label,
+                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }

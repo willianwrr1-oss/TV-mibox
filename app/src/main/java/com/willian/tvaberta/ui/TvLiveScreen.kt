@@ -105,16 +105,17 @@ fun TvLiveScreen(vm: MainViewModel) {
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(0.42f).fillMaxHeight()) {
             Text(
-                "TV ao vivo",
+                when (vm.area) { 1 -> "Filmes"; 2 -> "Séries"; else -> "TV ao vivo" },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                if (total == 1) "1 canal" else "${total} canais",
+                if (total == 1) "1 item" else "${total} itens",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton("Início") { vm.openArea(null) }
                 TvButton(if (query.isBlank()) "Buscar" else "Busca: " + query.trim()) { searchOpen = true }
                 TvButton("Atualizar") { vm.refresh(true) }
             }
@@ -152,31 +153,26 @@ fun TvLiveScreen(vm: MainViewModel) {
                                 selected = open == g.id,
                                 requester = if (gi == 0) firstReq else null,
                                 onLongClick = { if (g.isCategory) menuGroup = g.id }
-                            ) { vm.liveGroup = if (open == g.id) null else g.id }
+                            ) {
+                                vm.liveSub = null
+                                vm.liveGroup = if (open == g.id) null else g.id
+                            }
                         }
                         if (open == g.id) {
-                            val queue = g.items.map { it.ch }
-                            items(g.items, key = { "r:" + g.id + ":" + it.ch.key }) { item ->
-                                val isCur = current?.key == item.ch.key && vm.previewMode
-                                TvButton(
-                                    (if (isCur) "▶ " else "") + item.title,
-                                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                                    selected = isCur,
-                                    onLongClick = { menuTarget = item }
-                                ) {
-                                    vm.lastFocusKey = item.ch.key
-                                    if (isCur) vm.openFullscreen() else vm.playPreview(item.ch, queue)
+                            if (g.children.isNotEmpty()) {
+                                g.children.forEach { c ->
+                                    val subOpen = vm.liveSub == c.id
+                                    item(key = "h:" + c.id) {
+                                        TvButton(
+                                            c.label + "  (" + c.count + ")",
+                                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                                            selected = subOpen
+                                        ) { vm.liveSub = if (subOpen) null else c.id }
+                                    }
+                                    if (subOpen) tvRows(vm, c, current, 32) { menuTarget = it }
                                 }
-                            }
-                            if (g.hasMore) {
-                                item(key = "more:" + g.id) {
-                                    LaunchedEffect(g.items.size) { vm.loadMoreGroup() }
-                                    Text(
-                                        "Carregando mais canais…",
-                                        Modifier.padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                            } else {
+                                tvRows(vm, g, current, 16) { menuTarget = it }
                             }
                         }
                     }
@@ -502,6 +498,39 @@ private fun EpgPanel(vm: MainViewModel, modifier: Modifier) {
                     )
                 }
             }
+        }
+    }
+}
+
+
+private fun androidx.compose.foundation.lazy.LazyListScope.tvRows(
+    vm: MainViewModel,
+    g: LiveGroup,
+    current: com.willian.tvaberta.data.Channel?,
+    indent: Int,
+    onMenu: (ChannelItem) -> Unit,
+) {
+    val queue = g.items.map { it.ch }
+    items(g.items, key = { "r:" + g.id + ":" + it.ch.key }) { item ->
+        val isCur = current?.key == item.ch.key && vm.previewMode
+        TvButton(
+            (if (isCur) "▶ " else "") + item.title,
+            modifier = Modifier.fillMaxWidth().padding(start = indent.dp),
+            selected = isCur,
+            onLongClick = { onMenu(item) }
+        ) {
+            vm.lastFocusKey = item.ch.key
+            if (isCur) vm.openFullscreen() else vm.playPreview(item.ch, queue)
+        }
+    }
+    if (g.hasMore) {
+        item(key = "more:" + g.id) {
+            LaunchedEffect(g.items.size) { vm.loadMoreGroup() }
+            Text(
+                "Carregando mais…",
+                Modifier.padding(start = indent.dp, top = 6.dp, bottom = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

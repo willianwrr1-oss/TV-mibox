@@ -36,8 +36,6 @@ data class Programme(
  * (sem o sufixo @SD/@HD) e, se não achar, pelo nome do canal.
  */
 object Epg {
-    private const val MAX_EPG_BYTES = 512L * 1024L * 1024L
-
     // O link antigo (iptv-com/epg) saiu do ar (HTTP 404). Hoje: guia do Brasil do epgshare01 e, de reserva, o BrazilTVEPG.
     const val OLD_DEAD_MARK = "iptv-com/epg"
     const val DEFAULT_URL = "https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz\n" +
@@ -45,6 +43,20 @@ object Epg {
     const val SUGGESTED_URL = "https://iptv-epg.org/files/epg-br.xml"
 
     private lateinit var ctx: Context
+
+    private const val MAX_EPG_BYTES = 512L * 1024L * 1024L
+
+    private fun copyLimited(input: InputStream, output: OutputStream, maxBytes: Long) {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > maxBytes) throw IOException("Arquivo EPG excede o limite de tamanho permitido")
+            output.write(buffer, 0, read)
+        }
+    }
 
     /** Motivo da última falha de download, para mostrar ao usuário. */
     @Volatile
@@ -99,20 +111,6 @@ object Epg {
 
     // ------------------------------------------------------------------ download e leitura
 
-    /** Copia em streaming, interrompendo arquivos XMLTV excessivamente grandes. */
-    private fun copyLimited(input: InputStream, output: OutputStream, maxBytes: Long): Long {
-        val buffer = ByteArray(64 * 1024)
-        var total = 0L
-        while (true) {
-            val n = input.read(buffer)
-            if (n < 0) break
-            total += n
-            if (total > maxBytes) throw IOException("EPG excede o limite de ${maxBytes / (1024L * 1024L)} MB")
-            output.write(buffer, 0, n)
-        }
-        return total
-    }
-
     /** Baixa os guias. Devolve quantos deram certo. */
     suspend fun refresh(urls: List<String>): Int {
         if (_loading.value) return 0
@@ -121,14 +119,14 @@ object Epg {
         try {
             withContext(Dispatchers.IO) {
                 for (u in urls) {
+                    val tmp = File(dir(), "download.tmp")
                     try {
                         val req = Request.Builder().url(u).header("User-Agent", "TVAberta/1.0").build()
                         client.newCall(req).execute().use { r ->
                             if (!r.isSuccessful) throw IOException("HTTP " + r.code)
                             val body = r.body ?: throw IOException("vazio")
                             val length = body.contentLength()
-                            if (length > MAX_EPG_BYTES) throw IOException("EPG excede o limite de 512 MB")
-                            val tmp = File(dir(), "download.tmp")
+                            if (length > MAX_EPG_BYTES) throw IOException("Arquivo EPG excede o limite de tamanho permitido")
                             body.byteStream().use { input ->
                                 tmp.outputStream().use { out -> copyLimited(input, out, MAX_EPG_BYTES) }
                             }
@@ -140,11 +138,11 @@ object Epg {
                         }
                         ok++
                     } catch (e: CancellationException) {
-                        File(dir(), "download.tmp").delete()
                         throw e
                     } catch (e: Exception) {
-                        File(dir(), "download.tmp").delete()
                         lastError = (e.message ?: e.javaClass.simpleName)
+                    } finally {
+                        if (tmp.exists()) tmp.delete()
                     }
                 }
             }
@@ -154,6 +152,7 @@ object Epg {
         }
         return ok
     }
+
 
     suspend fun loadFromCache(urls: List<String>) = withContext(Dispatchers.Default) {
         val now = System.currentTimeMillis()
