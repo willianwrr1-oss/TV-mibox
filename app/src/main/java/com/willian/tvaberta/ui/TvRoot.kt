@@ -69,7 +69,7 @@ private val railTabs = listOf(
 fun TvRoot(vm: MainViewModel) {
     val s by SettingsStore.flow.collectAsState()
     AppTheme(s) {
-        val playing = vm.player.current != null
+        val playing = vm.player.current != null && vm.fullscreen
         var toast by remember { mutableStateOf<String?>(null) }
         var railPick by remember { mutableIntStateOf(vm.tab) }
 
@@ -94,8 +94,13 @@ fun TvRoot(vm: MainViewModel) {
 
         var exitAsk by remember { mutableStateOf(false) }
         val ctx = LocalContext.current
+        LaunchedEffect(vm.tab) {
+            if (vm.tab != 0 && vm.previewMode && !vm.fullscreen) vm.stopPreview()
+        }
         BackHandler(enabled = !playing) {
-            if (vm.tab != 0) {
+            if (vm.tab == 0 && vm.previewMode && vm.player.current != null) {
+                vm.stopPreview()
+            } else if (vm.tab != 0) {
                 vm.tab = 0
                 railPick = 0
                 vm.focusPending = true
@@ -126,7 +131,7 @@ fun TvRoot(vm: MainViewModel) {
                     ) {
                         key(vm.tab) {
                             when (vm.tab) {
-                                0 -> TvChannelsScreen(vm, favoritesOnly = false)
+                                0 -> TvLiveScreen(vm)
                                 1 -> TvGuideScreen(vm)
                                 2 -> TvChannelsScreen(vm, favoritesOnly = true)
                                 3 -> TvManageScreen(vm)

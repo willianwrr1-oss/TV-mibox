@@ -1,5 +1,8 @@
 package com.willian.tvaberta.ui
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -41,6 +44,7 @@ import com.willian.tvaberta.data.Channel
 import com.willian.tvaberta.data.ChannelItem
 import com.willian.tvaberta.data.Epg
 import com.willian.tvaberta.data.Programme
+import com.willian.tvaberta.data.Repo
 import com.willian.tvaberta.data.SettingsStore
 import kotlinx.coroutines.delay
 
@@ -53,7 +57,7 @@ private val NAME_W = 190.dp
 @Composable
 fun TvGuideScreen(vm: MainViewModel) {
     val s by SettingsStore.flow.collectAsState()
-    val all by vm.items.collectAsState()
+    val dataV by Repo.dataVersion.collectAsState()
     val version by Epg.version.collectAsState()
     val loading by Epg.loading.collectAsState()
 
@@ -75,10 +79,20 @@ fun TvGuideScreen(vm: MainViewModel) {
     }
     val end = start + WINDOW_MIN * 60_000L
 
-    val rows = remember(all, version, s.hideGeoBlocked, s.hideNot247, s.epgEnabled) {
-        if (!s.epgEnabled) emptyList()
-        else all.filter { isListed(it, s) && Epg.programmes(it.ch).isNotEmpty() }
-            .sortedBy { it.title.lowercase() }
+    val rows by produceState(
+        emptyList<ChannelItem>(), dataV, version, s.hideGeoBlocked, s.hideNot247, s.epgEnabled
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (!s.epgEnabled) emptyList()
+            else {
+                val out = ArrayList<ChannelItem>()
+                Repo.db.forEachLive(Repo.flt(s)) { ch ->
+                    if (Epg.programmes(ch).isNotEmpty()) out.add(Repo.item(ch))
+                    out.size < 800
+                }
+                out
+            }
+        }
     }
     val queue: List<Channel> = remember(rows) { rows.map { it.ch } }
 

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.willian.tvaberta.BuildConfig
+import java.io.File
 import com.willian.tvaberta.MainViewModel
 import com.willian.tvaberta.data.Countries
 import com.willian.tvaberta.data.Epg
@@ -34,12 +35,18 @@ import kotlinx.coroutines.delay
 /** Ajustes numa só página rolável: cada linha é um item para o controle remoto (OK troca o valor). */
 @Composable
 fun TvSettingsScreen(vm: MainViewModel) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val s by SettingsStore.flow.collectAsState()
     val sources by Repo.sources.collectAsState()
     val loadingEpg by Epg.loading.collectAsState()
     var pickCountry by remember { mutableStateOf(false) }
     val startImport = rememberTvM3uImport(vm)
+    val startRestore = rememberTvFileChooser(vm, setOf("json"), "Escolher arquivo de backup", ctx.getExternalFilesDir(null)) { f ->
+        vm.restoreFrom { f.inputStream() }
+    }
     var confirmResetList by remember { mutableStateOf(false) }
+    var packsOpen by remember { mutableStateOf(false) }
+    if (packsOpen) TvPacksDialog(vm) { packsOpen = false }
     var customDialog by remember { mutableStateOf(false) }
     var editUrls by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -166,6 +173,9 @@ fun TvSettingsScreen(vm: MainViewModel) {
         }
 
         TvSection("Fontes de canais") {
+            TvActionRow("Pacotes de canais", "Veja cada lista por link e cada arquivo importado, e exclua o pacote todo") {
+                packsOpen = true
+            }
             if (sources.isEmpty()) {
                 Text("Nenhuma fonte. Adicione um país ou uma lista M3U.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -184,6 +194,19 @@ fun TvSettingsScreen(vm: MainViewModel) {
             }
             TvActionRow("Resetar lista de canais", "Volta tudo ao inicial: fontes originais, sem canais importados nem escolhas", danger = true) {
                 confirmResetList = true
+            }
+        }
+
+        TvSection("Backup") {
+            TvActionRow(
+                "Exportar backup",
+                "Salva fontes, favoritos, excluídos, nomes e canais importados num arquivo no aparelho"
+            ) {
+                val f = File(ctx.getExternalFilesDir(null), "backup-tvaberta.json")
+                vm.backupTo("Backup salvo em " + f.path) { f.outputStream() }
+            }
+            TvActionRow("Restaurar backup", "Escolha o arquivo de backup (.json); ele substitui suas escolhas atuais") {
+                startRestore()
             }
         }
 

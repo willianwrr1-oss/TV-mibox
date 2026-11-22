@@ -53,17 +53,13 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
-    val all by vm.items.collectAsState()
     val s by SettingsStore.flow.collectAsState()
     val query by vm.query.collectAsState()
     val category by vm.category.collectAsState()
     val refreshing by Repo.refreshing.collectAsState()
 
     val origin by vm.origin.collectAsState()
-    val baseAll = remember(all, s) {
-        val listed = all.filter { isListed(it, s) }
-        if (favoritesOnly) listed.filter { it.st.favorite } else listed
-    }
+    val baseAll by vm.favorites.collectAsState()
     val origins = remember(baseAll) {
         baseAll.map { it.ch.sourceId }.distinct().sortedBy { Repo.originName(it).lowercase() }
     }
@@ -73,13 +69,8 @@ fun TvChannelsScreen(vm: MainViewModel, favoritesOnly: Boolean) {
     }
     val cats = remember(base) { categoriesOf(base) }
     val cat = category?.takeIf { it in cats }
-    val visible: List<ChannelItem> = remember(base, query, cat, s.sortMode) {
-        val q = query.trim()
-        val filtered = base.filter { item ->
-            (cat == null || cat in item.ch.groups) &&
-                (q.isEmpty() || item.title.contains(q, ignoreCase = true))
-        }
-        sortItems(filtered, s.sortMode)
+    val visible: List<ChannelItem> = remember(base, cat) {
+        if (cat == null) base else base.filter { cat in it.ch.groups }
     }
     val queue = remember(visible) { visible.map { it.ch } }
 

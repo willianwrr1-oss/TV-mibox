@@ -1,5 +1,8 @@
 package com.willian.tvaberta.ui
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,13 +46,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.willian.tvaberta.MainViewModel
 import com.willian.tvaberta.data.ChannelItem
+import com.willian.tvaberta.data.Repo
 import com.willian.tvaberta.data.SettingsStore
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 /** Gerenciar: ativos, desativados e excluídos, com botões grandes para o controle remoto. */
 @Composable
 fun TvManageScreen(vm: MainViewModel) {
-    val all by vm.items.collectAsState()
+    val dv by Repo.dataVersion.collectAsState()
+    val scope = rememberCoroutineScope()
     val s by SettingsStore.flow.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     var addOpen by remember { mutableStateOf(false) }
@@ -58,13 +65,21 @@ fun TvManageScreen(vm: MainViewModel) {
     var sel by remember { mutableStateOf(setOf<String>()) }
     var moveKeys by remember { mutableStateOf<List<String>?>(null) }
 
-    val active = remember(all) { all.filter { !it.st.deleted && !it.st.disabled }.sortedBy { it.title.lowercase() } }
-    val disabled = remember(all) { all.filter { !it.st.deleted && it.st.disabled }.sortedBy { it.title.lowercase() } }
-    val deleted = remember(all) { all.filter { it.st.deleted }.sortedBy { it.title.lowercase() } }
-    val list = when (tab) {
-        0 -> active
-        1 -> disabled
-        else -> deleted
+    val counts by produceState(Triple(0, 0, 0), dv) {
+        value = withContext(Dispatchers.IO) {
+            Triple(Repo.db.manageCount(0, ""), Repo.db.manageCount(1, ""), Repo.db.manageCount(2, ""))
+        }
+    }
+    val tabTotal = when (tab) {
+        0 -> counts.first
+        1 -> counts.second
+        else -> counts.third
+    }
+    val list by produceState(emptyList<ChannelItem>(), dv, tab) {
+        value = withContext(Dispatchers.IO) { Repo.db.manageList(tab, "", 500).map { Repo.item(it) } }
+    }
+    fun keysOfTab(done: (List<String>) -> Unit) {
+        scope.launch { done(withContext(Dispatchers.IO) { Repo.db.manageKeys(tab, "") }) }
     }
 
     val firstChip = remember { FocusRequester() }
@@ -92,9 +107,9 @@ fun TvManageScreen(vm: MainViewModel) {
         TvTitle("Gerenciar canais", "Desative para esconder, exclua para não voltar mais. Dá para restaurar.")
         Row(verticalAlignment = Alignment.CenterVertically) {
             LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                item { TvButton("Ativos (${active.size})", selected = tab == 0, requester = firstChip) { tab = 0 } }
-                item { TvButton("Desativados (${disabled.size})", selected = tab == 1) { tab = 1 } }
-                item { TvButton("Excluídos (${deleted.size})", selected = tab == 2) { tab = 2 } }
+                item { TvButton("Ativos (${counts.first})", selected = tab == 0, requester = firstChip) { tab = 0 } }
+                item { TvButton("Desativados (${counts.second})", selected = tab == 1) { tab = 1 } }
+                item { TvButton("Excluídos (${counts.third})", selected = tab == 2) { tab = 2 } }
             }
             Spacer(Modifier.width(10.dp))
             if (tab != 2 && list.isNotEmpty()) {
@@ -104,12 +119,12 @@ fun TvManageScreen(vm: MainViewModel) {
                 }
                 Spacer(Modifier.width(10.dp))
             }
-            if (tab == 1 && disabled.isNotEmpty()) {
-                TvButton("Ativar todos") { vm.setDisabled(disabled.map { it.ch.key }, false, withUndo = false) }
+            if (tab == 1 && counts.second > 0) {
+                TvButton("Ativar todos") { keysOfTab { vm.setDisabled(it, false, withUndo = false) } }
                 Spacer(Modifier.width(10.dp))
             }
-            if (tab == 2 && deleted.isNotEmpty()) {
-                TvButton("Restaurar todos") { vm.restore(deleted.map { it.ch.key }) }
+            if (tab == 2 && counts.third > 0) {
+                TvButton("Restaurar todos") { keysOfTab { vm.restore(it) } }
                 Spacer(Modifier.width(10.dp))
             }
             TvButton("Importar M3U") {
@@ -123,8 +138,8 @@ fun TvManageScreen(vm: MainViewModel) {
         if (selectMode && tab != 2) {
             TvSpacer(8)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TvButton(if (sel.size == list.size) "Limpar seleção" else "Marcar todos (" + list.size + ")") {
-                    sel = if (sel.size == list.size) emptySet() else list.map { it.ch.key }.toSet()
+                TvButton(if (sel.size >= tabTotal && tabTotal > 0) "Limpar seleção" else "Marcar todos (" + tabTotal + ")") {
+                    if (sel.size >= tabTotal) sel = emptySet() else keysOfTab { sel = it.toSet() }
                 }
                 Spacer(Modifier.width(10.dp))
                 if (sel.isNotEmpty()) {

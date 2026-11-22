@@ -16,13 +16,23 @@ object M3uParser {
 
     fun parse(text: String, sourceId: String, keyPrefix: String = ""): List<Channel> {
         val out = LinkedHashMap<String, Channel>()
+        parseLines(text.lineSequence(), sourceId, keyPrefix) { c ->
+            val existing = out[c.key]
+            if (existing != null) out[c.key] = existing.copy(urls = (existing.urls + c.urls).distinct())
+            else out[c.key] = c
+        }
+        return out.values.toList()
+    }
+
+    /** Lê linha a linha (sem guardar o arquivo na memória) e entrega cada canal; repetidos chegam repetidos. */
+    fun parseLines(lines: Sequence<String>, sourceId: String, keyPrefix: String, emit: (Channel) -> Unit) {
         var pending = false
         var attrs: Map<String, String> = emptyMap()
         var title = ""
         var ua: String? = null
         var ref: String? = null
 
-        for (raw in text.lineSequence()) {
+        for (raw in lines) {
             val line = raw.trim()
             if (line.isEmpty()) continue
 
@@ -30,9 +40,14 @@ object M3uParser {
                 pending = true
                 ua = null
                 ref = null
-                val matches = attrRegex.findAll(line).toList()
-                attrs = matches.associate { it.groupValues[1].lowercase() to it.groupValues[2] }
-                val from = if (matches.isNotEmpty()) matches.last().range.last + 1 else maxOf(0, line.indexOf(':'))
+                val parsedAttrs = HashMap<String, String>()
+                var lastAttrEnd = -1
+                for (match in attrRegex.findAll(line)) {
+                    parsedAttrs[match.groupValues[1].lowercase()] = match.groupValues[2]
+                    lastAttrEnd = match.range.last
+                }
+                attrs = parsedAttrs
+                val from = if (lastAttrEnd >= 0) lastAttrEnd + 1 else maxOf(0, line.indexOf(':'))
                 val comma = line.indexOf(',', from)
                 title = if (comma >= 0) line.substring(comma + 1).trim() else ""
             } else if (line.startsWith("#EXTVLCOPT:", ignoreCase = true)) {
@@ -84,11 +99,8 @@ object M3uParser {
                 val key = keyPrefix + if (id.isNotEmpty()) "id:$id" else "n:" + display.lowercase()
                 val logo = attrs["tvg-logo"]?.trim()?.takeIf { it.startsWith("http", ignoreCase = true) }
 
-                val existing = out[key]
-                if (existing != null) {
-                    out[key] = existing.copy(urls = (existing.urls + url).distinct())
-                } else {
-                    out[key] = Channel(
+                emit(
+                    Channel(
                         key = key,
                         name = display,
                         groups = if (groups.isEmpty()) listOf("Undefined") else groups,
@@ -101,9 +113,8 @@ object M3uParser {
                         not247 = n247,
                         sourceId = sourceId,
                     )
-                }
+                )
             }
         }
-        return out.values.toList()
     }
 }

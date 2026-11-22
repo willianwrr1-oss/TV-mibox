@@ -36,14 +36,25 @@ import com.willian.tvaberta.MainViewModel
 import kotlinx.coroutines.delay
 import java.io.File
 
-private val listExt = setOf("m3u", "m3u8", "txt")
+private val m3uExt = setOf("m3u", "m3u8", "txt")
 
 /**
  * Devolve uma função que inicia a importação de um arquivo M3U. Usa um navegador de pastas do próprio
  * app, porque muitas TVs e TV Boxes não trazem o seletor de arquivos do Android.
  */
 @Composable
-fun rememberTvM3uImport(vm: MainViewModel): () -> Unit {
+fun rememberTvM3uImport(vm: MainViewModel): () -> Unit =
+    rememberTvFileChooser(vm, m3uExt, "Escolher arquivo M3U", null) { vm.importM3uFile(it) }
+
+/** Igual ao de M3U, para qualquer tipo de arquivo (usado também para restaurar backup). */
+@Composable
+fun rememberTvFileChooser(
+    vm: MainViewModel,
+    exts: Set<String>,
+    title: String,
+    startDir: File?,
+    onFile: (File) -> Unit,
+): () -> Unit {
     val ctx = LocalContext.current
     var open by remember { mutableStateOf(false) }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -51,9 +62,12 @@ fun rememberTvM3uImport(vm: MainViewModel): () -> Unit {
     }
     if (open) {
         TvFilePicker(
+            exts = exts,
+            title = title,
+            startDir = startDir,
             onPick = {
                 open = false
-                vm.importM3uFile(it)
+                onFile(it)
             },
             onClose = { open = false }
         )
@@ -69,13 +83,15 @@ fun rememberTvM3uImport(vm: MainViewModel): () -> Unit {
 }
 
 @Composable
-private fun TvFilePicker(onPick: (File) -> Unit, onClose: () -> Unit) {
+private fun TvFilePicker(exts: Set<String>, title: String, startDir: File?, onPick: (File) -> Unit, onClose: () -> Unit) {
     val internal = remember { Environment.getExternalStorageDirectory() }
     val downloads = remember { File(internal, "Download") }
-    var dir by remember { mutableStateOf<File>(if (downloads.canRead()) downloads else internal) }
+    var dir by remember {
+        mutableStateOf<File>(startDir?.takeIf { it.canRead() } ?: (if (downloads.canRead()) downloads else internal))
+    }
     val kids: List<File> = remember(dir) {
         (dir.listFiles()?.toList() ?: emptyList())
-            .filter { !it.name.startsWith(".") && (it.isDirectory || it.extension.lowercase() in listExt) }
+            .filter { !it.name.startsWith(".") && (it.isDirectory || it.extension.lowercase() in exts) }
             .sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
     }
     val parent: File? = dir.parentFile?.takeIf { dir.path != "/storage" && it.canRead() }
@@ -92,7 +108,7 @@ private fun TvFilePicker(onPick: (File) -> Unit, onClose: () -> Unit) {
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Escolher arquivo M3U", style = MaterialTheme.typography.headlineSmall)
+                Text(title, style = MaterialTheme.typography.headlineSmall)
                 Text(
                     dir.path,
                     style = MaterialTheme.typography.bodyMedium,
@@ -109,7 +125,7 @@ private fun TvFilePicker(onPick: (File) -> Unit, onClose: () -> Unit) {
                 val rows = (if (parent != null) 1 else 0) + kids.size
                 if (rows == 0) {
                     Text(
-                        "Nenhum arquivo .m3u, .m3u8 ou .txt nesta pasta. Se tiver acabado de copiar o arquivo, " +
+                        "Nenhum arquivo compatível nesta pasta. Se tiver acabado de copiar o arquivo, " +
                             "confira se ele está em Download.",
                         style = MaterialTheme.typography.bodyLarge
                     )
