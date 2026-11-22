@@ -51,6 +51,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val category = MutableStateFlow<String?>(null)
     val origin = MutableStateFlow<String?>(null)
 
+    val catListState = androidx.compose.foundation.lazy.LazyListState()
+    val originListState = androidx.compose.foundation.lazy.LazyListState()
     var tab by mutableIntStateOf(0)
     var lastFocusKey by mutableStateOf<String?>(null)
     var focusPending by mutableStateOf(true)
