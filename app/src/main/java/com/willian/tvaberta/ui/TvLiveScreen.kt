@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -115,9 +116,9 @@ fun TvLiveScreen(vm: MainViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("Início") { vm.openArea(null) }
-                TvButton(if (query.isBlank()) "Buscar" else "Busca: " + query.trim()) { searchOpen = true }
-                TvButton("Atualizar") { vm.refresh(true) }
+                TvButton("Início", compact = true) { vm.openArea(null) }
+                TvButton(if (query.isBlank()) "Buscar" else "Busca: " + query.trim(), compact = true) { searchOpen = true }
+                TvButton("Atualizar", compact = true) { vm.refresh(true) }
             }
             if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (origins.size > 1) {
@@ -126,9 +127,9 @@ fun TvLiveScreen(vm: MainViewModel) {
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { TvButton("Todas as listas", selected = org == null) { vm.origin.value = null } }
+                    item { TvButton("Todas as listas", selected = org == null, compact = true) { vm.origin.value = null } }
                     items(origins) { o ->
-                        TvButton(Repo.originName(o), selected = org == o, onLongClick = { originMenu = o }) { vm.origin.value = o }
+                        TvButton(Repo.originName(o), selected = org == o, compact = true, onLongClick = { originMenu = o }) { vm.origin.value = o }
                     }
                 }
             }
@@ -152,6 +153,8 @@ fun TvLiveScreen(vm: MainViewModel) {
                                 modifier = Modifier.fillMaxWidth(),
                                 selected = open == g.id,
                                 requester = if (gi == 0) firstReq else null,
+                                compact = true,
+                                startAlign = true,
                                 onLongClick = { if (g.isCategory) menuGroup = g.id }
                             ) {
                                 vm.liveSub = null
@@ -166,7 +169,9 @@ fun TvLiveScreen(vm: MainViewModel) {
                                         TvButton(
                                             c.label + "  (" + c.count + ")",
                                             modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
-                                            selected = subOpen
+                                            selected = subOpen,
+                                            compact = true,
+                                            startAlign = true
                                         ) { vm.liveSub = if (subOpen) null else c.id }
                                     }
                                     if (subOpen) tvRows(vm, c, current, 32) { menuTarget = it }
@@ -434,8 +439,8 @@ private fun TechStrip(vm: MainViewModel, modifier: Modifier) {
 @Composable
 private fun TechCell(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -461,11 +466,11 @@ private fun EpgPanel(vm: MainViewModel, modifier: Modifier) {
             .padding(10.dp)
     ) {
         if (ch == null) {
-            Text("Escolha um canal para ver a programação.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Escolha um canal para ver a programação.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
         if (!s.epgEnabled) {
-            Text("O guia de programação está desativado em Ajustes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("O guia de programação está desativado em Ajustes.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
         val list = remember(ch.key, version, nowMs / 60_000L) {
@@ -474,6 +479,7 @@ private fun EpgPanel(vm: MainViewModel, modifier: Modifier) {
         if (list.isEmpty()) {
             Text(
                 "Sem programação para este canal. Nem todo canal consta nos guias.",
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             return@Column
@@ -487,6 +493,7 @@ private fun EpgPanel(vm: MainViewModel, modifier: Modifier) {
                         fmtClock(p.start) + "–" + fmtClock(p.stop),
                         Modifier.padding(end = 10.dp),
                         style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
                         color = if (live) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (live) FontWeight.Bold else FontWeight.Normal
                     )
@@ -494,6 +501,7 @@ private fun EpgPanel(vm: MainViewModel, modifier: Modifier) {
                         p.title,
                         Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 12.sp,
                         fontWeight = if (live) FontWeight.Bold else FontWeight.Normal
                     )
                 }
@@ -517,6 +525,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.tvRows(
             (if (isCur) "▶ " else "") + item.title,
             modifier = Modifier.fillMaxWidth().padding(start = indent.dp),
             selected = isCur,
+            compact = true,
+            startAlign = true,
             onLongClick = { onMenu(item) }
         ) {
             vm.lastFocusKey = item.ch.key

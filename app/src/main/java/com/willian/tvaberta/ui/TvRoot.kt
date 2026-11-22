@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,28 +52,31 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.willian.tvaberta.MainViewModel
 import com.willian.tvaberta.data.SettingsStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private class RailTab(val label: String, val icon: ImageVector)
+private class TopTab(val label: String, val tab: Int, val area: Int?)
 
-private val railTabs = listOf(
-    RailTab("Início", Icons.Default.Home),
-    RailTab("Guia", Icons.Default.Schedule),
-    RailTab("Favoritos", Icons.Default.Star),
-    RailTab("Gerenciar", Icons.Default.Tune),
-    RailTab("Ajustes", Icons.Default.Settings),
+private val topTabs = listOf(
+    TopTab("Início", 0, null),
+    TopTab("TV ao vivo", 0, 0),
+    TopTab("Filmes", 0, 1),
+    TopTab("Séries", 0, 2),
+    TopTab("Guia", 1, null),
+    TopTab("Favoritos", 2, null),
+    TopTab("Gerenciar", 3, null),
+    TopTab("Ajustes", 4, null),
 )
 
 @Composable
 fun TvRoot(vm: MainViewModel) {
     val s by SettingsStore.flow.collectAsState()
-    AppTheme(s) {
+    AppTheme(if (s.theme == 0) s.copy(theme = 2) else s) {
         val playing = vm.player.current != null && vm.fullscreen
         var toast by remember { mutableStateOf<String?>(null) }
-        var railPick by remember { mutableIntStateOf(vm.tab) }
 
         LaunchedEffect(Unit) {
             vm.events.collect { e -> toast = e.text }
@@ -87,12 +91,6 @@ fun TvRoot(vm: MainViewModel) {
         LaunchedEffect(playing) {
             if (!playing) vm.focusPending = true
         }
-        // Passar pelo menu lateral troca a tela (com um pequeno atraso para não piscar).
-        LaunchedEffect(railPick) {
-            delay(250)
-            if (vm.tab != railPick) vm.tab = railPick
-        }
-
         var exitAsk by remember { mutableStateOf(false) }
         val ctx = LocalContext.current
         LaunchedEffect(vm.tab) {
@@ -103,7 +101,6 @@ fun TvRoot(vm: MainViewModel) {
                 vm.stopPreview()
             } else if (vm.tab != 0) {
                 vm.tab = 0
-                railPick = 0
                 vm.focusPending = true
             } else if (vm.area != null) {
                 vm.openArea(null)
@@ -121,17 +118,17 @@ fun TvRoot(vm: MainViewModel) {
             if (playing) {
                 TvPlayerScreen(vm)
             } else {
-                Row(
+                Column(
                     Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 40.dp, vertical = 24.dp)
+                        .padding(horizontal = 44.dp, vertical = 16.dp)
                 ) {
-                    Rail(vm, onPick = { railPick = it })
-                    Spacer(Modifier.width(20.dp))
+                    TopBar(vm)
                     Box(
                         Modifier
                             .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
                     ) {
                         key(vm.tab) {
                             when (vm.tab) {
@@ -186,57 +183,64 @@ fun TvRoot(vm: MainViewModel) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Rail(vm: MainViewModel, onPick: (Int) -> Unit) {
+private fun TopBar(vm: MainViewModel) {
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
-    val requesters = remember { List(railTabs.size) { FocusRequester() } }
-    Column(
-        Modifier
-            .width(72.dp)
-            .fillMaxHeight()
-            // Ao voltar para o menu pela esquerda, o foco cai no item da tela atual.
-            .focusProperties { enter = { requesters[vm.tab.coerceIn(0, requesters.lastIndex)] } }
-            .focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(Modifier.fillMaxWidth().padding(bottom = 14.dp), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.LiveTv, contentDescription = "TV Aberta", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+    val requesters = remember { List(topTabs.size) { FocusRequester() } }
+    val selected = topTabs.indexOfFirst { it.tab == vm.tab && (it.tab != 0 || it.area == vm.area) }.coerceAtLeast(0)
+    var clock by remember { mutableStateOf(clockText()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(20_000)
+            clock = clockText()
         }
-        railTabs.forEachIndexed { i, t ->
-            val selected = vm.tab == i
-            val shape = RoundedCornerShape(12.dp)
-            Row(
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            // Ao subir do conteúdo, o foco cai na aba da tela atual.
+            .focusProperties { enter = { requesters[selected.coerceIn(0, requesters.lastIndex)] } }
+            .focusGroup(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Icon(Icons.Default.LiveTv, contentDescription = "TV Aberta", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        Text("TV Aberta", Modifier.padding(start = 8.dp, end = 18.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        topTabs.forEachIndexed { i, t ->
+            val sel = i == selected
+            val shape = RoundedCornerShape(50)
+            Box(
                 Modifier
-                    .fillMaxWidth()
                     .focusRequesterOf(requesters[i])
-                    .tvClickable(shape, onFocus = { if (it) onPick(i) }) {
-                        onPick(i)
-                        if (i == 0 && vm.tab == 0) vm.openArea(null)
-                        vm.tab = i
+                    .tvClickable(shape) {
+                        vm.tab = t.tab
+                        if (t.tab == 0) vm.openArea(t.area)
+                        vm.focusPending = true
                         scope.launch {
                             delay(150)
-                            focusManager.moveFocus(FocusDirection.Right)
+                            focusManager.moveFocus(FocusDirection.Down)
                         }
                     }
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        shape
-                    )
-                    .padding(vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                    .background(if (sel) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent, shape)
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
-                Icon(
-                    t.icon,
-                    contentDescription = t.label,
-                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(28.dp)
+                Text(
+                    t.label,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (sel) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
                 )
             }
         }
+        Spacer(Modifier.weight(1f))
+        Text(clock, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+private fun clockText(): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
 
 private fun Modifier.focusRequesterOf(r: FocusRequester): Modifier =
     this.then(Modifier.focusRequester(r))

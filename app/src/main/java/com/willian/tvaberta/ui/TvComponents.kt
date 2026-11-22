@@ -42,6 +42,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private class LongFlag {
     var fired = false
@@ -115,6 +116,8 @@ fun TvButton(
     selected: Boolean = false,
     requester: FocusRequester? = null,
     onLongClick: (() -> Unit)? = null,
+    compact: Boolean = false,
+    startAlign: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(12.dp)
@@ -137,15 +140,20 @@ fun TvButton(
             .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
             .tvClickable(shape, onFocus = { focused = it }, onLongClick = onLongClick, onClick = onClick)
             .background(bg, shape)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 6.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = if (startAlign) Arrangement.Start else Arrangement.Center
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = fg, maxLines = 1, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(
+            text, color = fg, maxLines = 1,
+            style = MaterialTheme.typography.titleSmall,
+            fontSize = if (compact) 12.sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
