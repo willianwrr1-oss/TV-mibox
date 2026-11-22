@@ -25,11 +25,13 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -110,51 +112,53 @@ fun TvRoot(vm: MainViewModel) {
             }
         }
 
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            if (playing) {
-                TvPlayerScreen(vm)
-            } else {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 44.dp, vertical = 16.dp)
-                ) {
-                    TopBar(vm)
-                    Box(
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                if (playing) {
+                    TvPlayerScreen(vm)
+                } else {
+                    Column(
                         Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
+                            .fillMaxSize()
+                            .padding(horizontal = 44.dp, vertical = 16.dp)
                     ) {
-                        key(vm.tab) {
-                            when (vm.tab) {
-                                0 -> if (vm.area == null) TvHomeScreen(vm) else TvLiveScreen(vm)
-                                1 -> TvGuideScreen(vm)
-                                2 -> TvChannelsScreen(vm, favoritesOnly = true)
-                                3 -> TvManageScreen(vm)
-                                else -> TvSettingsScreen(vm)
+                        TopBar(vm)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            key(vm.tab) {
+                                when (vm.tab) {
+                                    0 -> if (vm.area == null) TvHomeScreen(vm) else TvLiveScreen(vm)
+                                    1 -> TvGuideScreen(vm)
+                                    2 -> TvChannelsScreen(vm, favoritesOnly = true)
+                                    3 -> TvManageScreen(vm)
+                                    else -> TvSettingsScreen(vm)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            val msg = toast
-            if (msg != null) {
-                Text(
-                    msg,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 40.dp)
-                        .background(Color(0xE6000000), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
-                )
+                val msg = toast
+                if (msg != null) {
+                    Text(
+                        msg,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 40.dp)
+                            .background(Color(0xE6000000), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
         }
 

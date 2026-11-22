@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.willian.tvaberta.BuildConfig
 import java.io.File
 import com.willian.tvaberta.MainViewModel
@@ -45,6 +46,16 @@ fun TvSettingsScreen(vm: MainViewModel) {
         vm.restoreFrom { f.inputStream() }
     }
     var confirmResetList by remember { mutableStateOf(false) }
+    var showDiag by remember { mutableStateOf(false) }
+    val diagText by Repo.diag.collectAsState()
+    if (showDiag) {
+        AlertDialog(
+            onDismissRequest = { showDiag = false },
+            title = { Text("Diagnóstico da lista") },
+            text = { Text(diagText.ifBlank { "Nada registrado ainda." }, fontSize = 12.sp) },
+            confirmButton = { TvButton("Fechar", compact = true) { showDiag = false } }
+        )
+    }
     var packsOpen by remember { mutableStateOf(false) }
     if (packsOpen) TvPacksDialog(vm) { packsOpen = false }
     var customDialog by remember { mutableStateOf(false) }
@@ -211,6 +222,7 @@ fun TvSettingsScreen(vm: MainViewModel) {
         }
 
         TvSection("Dados") {
+            TvActionRow("Diagnóstico da lista", "Mostra o que o app encontrou ao abrir") { showDiag = true }
             TvActionRow("Limpar listas baixadas", "Apaga as listas salvas; use Atualizar para baixar de novo") {
                 Repo.clearListCache()
                 vm.toast("Listas apagadas. Atualize para baixar de novo.")
